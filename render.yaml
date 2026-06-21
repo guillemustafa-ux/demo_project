@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: nft-airdrop-api
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        value: warehouse-demo-secret-xentrolance-2026
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: REDIS_URL
+        value: ""
+      - key: NEXT_PUBLIC_CHAIN_ID
+        value: "11155111"

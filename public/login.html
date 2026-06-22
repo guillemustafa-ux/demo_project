@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Web3 Sign-In — NFT Airdrop Platform</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(circle at 50% 0%, #11182f 0%, #060912 60%);
+      color: #e5e7eb;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      width: 100%;
+      max-width: 440px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 20px;
+      padding: 36px 32px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    }
+    .icon {
+      width: 64px; height: 64px;
+      margin: 0 auto 18px;
+      border-radius: 50%;
+      background: rgba(56,132,255,0.18);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 30px;
+    }
+    h1 { font-size: 24px; text-align: center; color: #fff; }
+    .sub { text-align: center; color: #9ca3af; font-size: 14px; margin: 8px 0 26px; }
+    .steps { display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; }
+    .step {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; border-radius: 10px;
+      background: rgba(255,255,255,0.04);
+      font-size: 14px; color: #9ca3af;
+      transition: all .3s ease;
+    }
+    .step .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: rgba(255,255,255,0.2); flex: none;
+    }
+    .step.active { background: rgba(56,132,255,0.18); color: #bcd4ff; }
+    .step.active .dot { background: #3b82f6; animation: pulse 1s infinite; }
+    .step.done { color: #86efac; }
+    .step.done .dot { background: #22c55e; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+    button {
+      width: 100%; padding: 14px; border: none; border-radius: 12px;
+      background: linear-gradient(90deg, #2563eb, #3b82f6);
+      color: #fff; font-size: 16px; font-weight: 600; cursor: pointer;
+      transition: opacity .2s;
+    }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .msg { margin-top: 14px; padding: 12px 14px; border-radius: 10px; font-size: 13px; text-align: center; }
+    .msg.err { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); color: #fca5a5; }
+    .msg.ok  { background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.3); color: #86efac; }
+    .addr { margin-top: 12px; text-align: center; font-size: 12px; color: #6b7280; }
+    .token {
+      margin-top: 14px; padding: 12px; border-radius: 10px;
+      background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.08);
+      font-family: ui-monospace, monospace; font-size: 11px; color: #93c5fd;
+      word-break: break-all; display: none;
+    }
+    .token b { color: #9ca3af; font-family: inherit; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">🔐</div>
+    <h1>Web3 Sign-In</h1>
+    <p class="sub">Connect your wallet and sign a message to authenticate — no password needed.</p>
+
+    <div class="steps">
+      <div class="step" id="s1"><span class="dot"></span>1. Connect wallet</div>
+      <div class="step" id="s2"><span class="dot"></span>2. Sign challenge message</div>
+      <div class="step" id="s3"><span class="dot"></span>3. Backend verifies signature</div>
+      <div class="step" id="s4"><span class="dot"></span>4. Receive JWT session token</div>
+    </div>
+
+    <button id="btn">Connect Wallet &amp; Sign In</button>
+    <div id="msg"></div>
+    <div id="addr" class="addr"></div>
+    <div id="token" class="token"></div>
+  </div>
+
+  <script type="module">
+    import { BrowserProvider } from "https://esm.sh/ethers@6.13.4";
+    import { SiweMessage } from "https://esm.sh/siwe@2.3.2";
+
+    const $ = (id) => document.getElementById(id);
+    const btn = $("btn"), msg = $("msg"), addrEl = $("addr"), tokenEl = $("token");
+
+    function setStep(n, state) {
+      const el = $("s" + n);
+      el.classList.remove("active", "done");
+      if (state) el.classList.add(state);
+    }
+    function resetSteps() { [1,2,3,4].forEach((n) => setStep(n, null)); }
+    function showMsg(text, kind) { msg.className = "msg " + kind; msg.textContent = text; }
+
+    async function login() {
+      msg.className = ""; msg.textContent = ""; tokenEl.style.display = "none";
+      resetSteps();
+      if (!window.ethereum) { showMsg("MetaMask not detected. Please install it.", "err"); return; }
+      btn.disabled = true;
+
+      try {
+        // 1. Connect wallet
+        setStep(1, "active");
+        const provider = new BrowserProvider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        const network = await provider.getNetwork();
+        const signer = await provider.getSigner();
+        const address = await signer.getAddress();
+        addrEl.textContent = "Connected: " + address.slice(0, 6) + "…" + address.slice(-4)
+          + "  ·  chain " + Number(network.chainId);
+        setStep(1, "done");
+
+        // Request a nonce from the backend
+        const nonceRes = await fetch("/auth/nonce", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ walletAddress: address }),
+        });
+        const { nonce } = await nonceRes.json();
+
+        // 2. Build the SIWE message and sign it
+        setStep(2, "active");
+        showMsg("Check MetaMask and sign the message…", "ok");
+        const siwe = new SiweMessage({
+          domain: window.location.host,
+          address,
+          statement: "Sign in to NFT Airdrop Platform",
+          uri: window.location.origin,
+          version: "1",
+          chainId: Number(network.chainId),
+          nonce,
+        });
+        const prepared = siwe.prepareMessage();
+        const signature = await signer.signMessage(prepared);
+        setStep(2, "done");
+
+        // 3. Backend verifies the signature
+        setStep(3, "active");
+        const verifyRes = await fetch("/auth/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: prepared, signature }),
+        });
+        if (!verifyRes.ok) {
+          const e = await verifyRes.json().catch(() => ({}));
+          throw new Error(e.error || "Verification failed");
+        }
+        const { token } = await verifyRes.json();
+        setStep(3, "done");
+
+        // 4. Receive JWT
+        setStep(4, "done");
+        localStorage.setItem("jwt", token);
+        showMsg("✓ Authenticated! JWT stored in localStorage.", "ok");
+        tokenEl.style.display = "block";
+        tokenEl.innerHTML = "<b>JWT:</b> " + token;
+        btn.textContent = "Signed in ✓";
+      } catch (err) {
+        showMsg(err?.message || "Something went wrong", "err");
+        btn.disabled = false;
+      }
+    }
+
+    btn.addEventListener("click", login);
+  </script>
+</body>
+</html>

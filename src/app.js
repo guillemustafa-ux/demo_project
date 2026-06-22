@@ -1,3 +1,4 @@
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -13,6 +14,12 @@ const webhookRoutes = require("./routes/webhooks");
 
 function createApp() {
   const app = express();
+
+  // Standalone Web3 login demo page — served before helmet so the page can
+  // load ethers/siwe from a CDN and run its inline module script (no CSP block).
+  app.get("/login", (_req, res) => {
+    res.sendFile(path.join(__dirname, "..", "public", "login.html"));
+  });
 
   app.use(helmet());
   app.use(
